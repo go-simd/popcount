@@ -1,6 +1,7 @@
 # popcount
 
 [![ci](https://github.com/go-simd/popcount/actions/workflows/ci.yml/badge.svg)](https://github.com/go-simd/popcount/actions/workflows/ci.yml)
+![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-simd/popcount.svg)](https://pkg.go.dev/github.com/go-simd/popcount)
 
 Fast **population count** (total set bits, a.k.a. Hamming weight) over a
@@ -123,6 +124,14 @@ is per-word, so the scalar baseline is an `OnesCount64` loop over the data.
 The amd64 kernels are validated on a real x86_64 host (not Rosetta — it has no
 AVX2 — and not a `--platform amd64` container, which crashes Go); arm64 is the
 native dev box; riscv64/loong64 build and run under QEMU.
+
+The Go code is at **100 % statement coverage**, gated in CI on every
+architecture (native amd64 + arm64, and riscv64 + loong64 under QEMU); the build
+fails below 100 %. All three amd64 `count` dispatch branches (hardware POPCNT,
+the AVX2 fallback and the scalar path) are exercised on the native amd64 runner
+by toggling the feature flags. The figure is of the Go code only — the generated
+`.s` SIMD kernels are not measured by `go test -cover`; they are validated by the
+differential force tests against the scalar reference plus the fuzz target.
 
 ## License
 
