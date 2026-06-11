@@ -1,0 +1,4 @@
+github.com/barakmich/go-popcount v0.0.0-20220526182049-58b8dd5b3dc5 h1:QEGLH66N1VvtLPEWfrIwVq/tZsVkYVNn+Vi4TJc4OaQ=
+github.com/barakmich/go-popcount v0.0.0-20220526182049-58b8dd5b3dc5/go.mod h1:BeZ7PWgdnu9eLXM9FioL5laxc859z8XtHG7L+Tocmwg=
+golang.org/x/sys v0.28.0 h1:Fksou7UEQUWlKvIdsqzJmUmCX3cZuD2+P3XyyzwMhlA=
+golang.org/x/sys v0.28.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=

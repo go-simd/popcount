@@ -1,0 +1,23 @@
+name: bench
+# Native amd64 throughput on ubuntu-latest. The dev machine is arm64 and the
+# amd64 kernels are otherwise only exercised under QEMU locally (which distorts
+# the scalar-vs-SIMD ratio); this job produces representative native numbers for
+# the README Performance table: ours (POPCNTQ / AVX2) vs the scalar OnesCount64
+# loop vs barakmich/go-popcount, across 1 KiB / 64 KiB / 1 MiB / 16 MiB.
+on:
+  push:
+    branches: [main, bench]
+  workflow_dispatch:
+jobs:
+  bench:
+    runs-on: ubuntu-latest # native amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - name: cpu features
+        run: grep -m1 -oE 'popcnt|avx2|avx512[a-z]+' /proc/cpuinfo | sort -u | tr "\n" " "; echo
+      - name: go env
+        run: go env GOARCH GOAMD64
+      - name: benchmark ours vs scalar vs barakmich
+        run: go test -run '^$' -bench 'Count|Scalar|Barakmich' -benchmem -count=6 ./...
