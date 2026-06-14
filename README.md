@@ -83,6 +83,15 @@ shape. On native silicon the scalar `OnesCount64` loop is much faster than the
 QEMU figure above (it too uses `POPCNT`); the SIMD edge over it narrows but the
 ordering holds, and the out-of-cache convergence is the same story.
 
+**Ratio re-confirmation (as of 2026-06-14):** re-benched `-count=6` medians at
+1 MiB. On a QEMU x86_64 lima VM (absolutes TCG-low, ratio valid): ours
+**~7370 MB/s vs barakmich ~6148 MB/s = ~1.20×**, both ~11× over the scalar loop
+(~640 MB/s). The **vs-barakmich verdict holds on amd64.** On **native arm64**
+ours and barakmich are at **near-exact parity (~1.00×, both ~107 GB/s)** — both
+ride the same NEON `VCNT`/`VUADDLV` pattern and are memory-bound at 1 MiB, so a
+tie is the expected (and confirmed) outcome there. Verdict unchanged: we beat
+barakmich on amd64, match it on arm64.
+
 The AVX2 kernel's inner popcount+reduction block models at ~3.0 cycles
 RThroughput on Haswell / ~2.0 on Zen3 (`llvm-mca`), amortised over 16 input
 vectors (512 B) per Harley-Seal reduction — compute-light, but still beaten by
@@ -101,6 +110,43 @@ the full table test + size sweep + `FuzzCount` seed corpus against the scalar
 reference under QEMU on every CI run, but QEMU/TCG is not cycle-accurate, so no
 throughput numbers are quoted for them until they can be measured on real POWER
 and IBM Z silicon.
+
+#### ppc64le / s390x — llvm-mca cycle-model estimate
+
+**Static analysis, NOT a hardware measurement; native perf pending real silicon.**
+No native POWER/Z runner exists here and QEMU is not cycle-accurate, so the
+defensible perf signal is a cycle-model estimate. The committed 16-byte inner
+loops were extracted from `count_ppc64le.s` / `count_s390x.s` and fed to
+`llvm-mca` (LLVM 22; production PowerPC + SystemZ backends):
+
+```
+llvm-mca -mtriple=powerpc64le-unknown-linux-gnu -mcpu=pwr9 <loop.s>
+llvm-mca -mtriple=s390x-unknown-linux-gnu -mcpu=z14  <loop.s>
+```
+
+The ×scalar baseline is the genuine fallback: a `bits.OnesCount64` word loop,
+which on both arches compiles to the **hardware GPR popcount** (`POPCNTD` /
+`POPCNT`) — so this is SIMD-vector vs a *very strong* scalar, not vs a software
+bit-twiddle.
+
+| arch (cpu) | SIMD loop (16 B/iter) | scalar loop (8 B/iter, HW popcount) | est. SIMD bytes/cycle | est. scalar bytes/cycle | est. ×scalar |
+|---|---:|---:|---:|---:|---:|
+| ppc64le (pwr9) | ~2.5 cyc/iter | ~1.3 cyc/iter | **~6.4** | ~6.2 | **~1.04× (≈parity)** |
+| s390x (z14)    | ~1.5 cyc/iter | ~2.5 cyc/iter | **~10.7** | ~3.2 | **~3.3×** |
+
+The honest read: on **POWER9 the VSX path barely edges scalar** — `VPOPCNTD`
+counts a full vector, but the two `MFVSRD`/`MFVSRLD` moves to extract the
+per-doubleword counts back to GPRs form a serial dependency that nearly cancels
+the SIMD width against POWER's already-1/cycle GPR `POPCNTD`. On **z14 the
+vector path wins ~3×** because `VSUMB`+`VSUMQF` reduce the per-byte counts
+*inside* the vector unit, avoiding the per-word GPR round-trip; the z14 scalar
+loop also pays a `popcnt`-then-byte-fold sequence (no single-instruction
+byte-sum without z15's MIE3). Caveats: `Block RThroughput` is a steady-state
+throughput ceiling (no cache/front-end/branch modelling); the scalar baseline is
+an idealised loop, so real Go scalar would be a touch slower (making the s390x
+×scalar a conservative lower bound and ppc64le likely a hair above parity in
+practice). All instructions in both loops are modelled by llvm-mca. Ballpark
+ordering only — to be replaced by native `bytes/cycle` on real POWER9 / z14.
 
 ## riscv64
 
