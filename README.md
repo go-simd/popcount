@@ -177,6 +177,16 @@ Zvbb `vcpop.v` instruction. riscv64 therefore uses the portable
 extension is present). If/when Go's riscv64 assembler gains `vcpop.v`, a kernel
 can be added without an API change.
 
+**Measured on real SpacemiT X60 (RVV 1.0) — honest loss.** On a real SpacemiT
+X60 (GCC Compile Farm, Go 1.26.4, June 2026) our scalar-fallback path runs at
+**258 MB/s** while [`barakmich/go-popcount`](https://github.com/barakmich/go-popcount)'s
+**SWAR kernel is ~5.5× faster (1426 MB/s)** on this core. This is a genuine loss
+on riscv64: with no `vcpop.v` to build a real RVV byte-popcount, our portable
+word loop has nothing to lever, and a hand-rolled SWAR bit-twiddle beats it.
+**The POPCNTQ/AVX2 win is amd64-only** — we do not claim a riscv64 win. (The X60
+is a low-power, *in-order* core and currently the only widely-available RVV 1.0
+silicon.)
+
 ## Existing work
 
 [`barakmich/go-popcount`](https://github.com/barakmich/go-popcount) (which
