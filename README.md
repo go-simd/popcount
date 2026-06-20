@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/go-simd/brand/main/social/go-simd.png" alt="go-simd/popcount" width="720"></p>
+
 # popcount
 
 [![ci](https://github.com/go-simd/popcount/actions/workflows/ci.yml/badge.svg)](https://github.com/go-simd/popcount/actions/workflows/ci.yml)
@@ -31,11 +33,6 @@ Six architectures carry a native SIMD kernel: amd64, arm64, loong64, ppc64le and
 s390x. The ppc64le path is the POWER8 VSX baseline and s390x is the z13 vector-
 facility baseline, so — like loong64 LSX — they need no runtime feature flag,
 just the arch's build-tagged path.
-
-We keep **six SIMD targets, validated on seven architectures**: the six SIMD
-arches above plus ppc64 (big-endian), where the portable `OnesCount64` fallback
-is build+test validated bit-exact on real POWER9 silicon — a big-endian target
-distinct from s390x's vector kernel.
 
 Each kernel handles whole blocks; a scalar `OnesCount64` tail finishes the
 remainder, so the result is always bit-identical to the reference.
@@ -105,35 +102,24 @@ amd64 path.
 
 ### arm64 / loong64 / ppc64le / s390x
 
-NEON `VCNT` (arm64), LSX `VPCNTV` (loong64) and VSX `VPOPCNTD` (ppc64le) give a
-genuine per-byte SIMD popcount and beat the scalar loop in-cache; out-of-cache
-they converge to the same memory-bandwidth ceiling. Native arm64 numbers are
-produced by CI. The ppc64le path is now measured on real POWER10 (ppc64le VSX,
-GCC Compile Farm, June 2026): 1 MiB ~3.0× the scalar baseline (6552 vs
-2194 MB/s); in-cache the ratio is higher, and out-of-cache it converges toward
-the scalar path as both become memory-bound.
+NEON `VCNT` (arm64) and LSX `VPCNTV` (loong64) give a genuine per-byte SIMD
+popcount and beat the scalar loop in-cache; out-of-cache they converge to the
+same memory-bandwidth ceiling. Native arm64 numbers are produced by CI.
 
-The **ppc64le** (VSX `VPOPCNTD`) kernel is now **measured on real POWER10**
-(ppc64le VSX, [GCC Compile Farm](https://portal.cfarm.net/), Go 1.26.4, June
-2026): at 1 MiB it runs at **~3.0× the scalar baseline (6552 vs 2194 MB/s)**;
-in-cache the ratio is higher, and out-of-cache it converges toward the scalar
-path as both become memory-bandwidth-bound. The **s390x** (`VPOPCT` +
-`VSUMB`/`VSUMQF`) kernel remains **qemu-validated for correctness only; native
-throughput still pending** (no GitHub-hosted IBM Z runner). Both build, run, and
-pass the full table test + size sweep + `FuzzCount` seed corpus against the
-scalar reference under QEMU on every CI run; QEMU/TCG is not cycle-accurate, so
-no s390x throughput numbers are quoted until they can be measured on real IBM Z
-silicon.
+The **ppc64le** (VSX `VPOPCNTD`) and **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`)
+kernels are **qemu-validated; native perf pending**. They build, run, and pass
+the full table test + size sweep + `FuzzCount` seed corpus against the scalar
+reference under QEMU on every CI run, but QEMU/TCG is not cycle-accurate, so no
+throughput numbers are quoted for them until they can be measured on real POWER
+and IBM Z silicon.
 
-#### s390x — llvm-mca cycle-model estimate
+#### ppc64le / s390x — llvm-mca cycle-model estimate
 
-**Static analysis, NOT a hardware measurement; s390x native perf pending real
-silicon.** ppc64le is no longer in this estimate table — it is now measured on
-real POWER10 (see above). For s390x no native IBM Z runner exists here and QEMU
-is not cycle-accurate, so the defensible perf signal is a cycle-model estimate.
-The committed 16-byte inner loops were extracted from `count_ppc64le.s` /
-`count_s390x.s` and fed to `llvm-mca` (LLVM 22; production PowerPC + SystemZ
-backends):
+**Static analysis, NOT a hardware measurement; native perf pending real silicon.**
+No native POWER/Z runner exists here and QEMU is not cycle-accurate, so the
+defensible perf signal is a cycle-model estimate. The committed 16-byte inner
+loops were extracted from `count_ppc64le.s` / `count_s390x.s` and fed to
+`llvm-mca` (LLVM 22; production PowerPC + SystemZ backends):
 
 ```
 llvm-mca -mtriple=powerpc64le-unknown-linux-gnu -mcpu=pwr9 <loop.s>
@@ -147,8 +133,8 @@ bit-twiddle.
 
 | arch (cpu) | SIMD loop (16 B/iter) | scalar loop (8 B/iter, HW popcount) | est. SIMD bytes/cycle | est. scalar bytes/cycle | est. ×scalar |
 |---|---:|---:|---:|---:|---:|
-| ppc64le (pwr9) — superseded by POWER10 measurement | ~2.5 cyc/iter | ~1.3 cyc/iter | **~6.4** | ~6.2 | **~1.04× (estimate; real POWER10 measures ~3.0× at 1 MiB)** |
-| s390x (z14)    | ~1.5 cyc/iter | ~2.5 cyc/iter | **~10.7** | ~3.2 | **~3.3× (estimate; native pending)** |
+| ppc64le (pwr9) | ~2.5 cyc/iter | ~1.3 cyc/iter | **~6.4** | ~6.2 | **~1.04× (≈parity)** |
+| s390x (z14)    | ~1.5 cyc/iter | ~2.5 cyc/iter | **~10.7** | ~3.2 | **~3.3×** |
 
 The honest read: on **POWER9 the VSX path barely edges scalar** — `VPOPCNTD`
 counts a full vector, but the two `MFVSRD`/`MFVSRLD` moves to extract the
@@ -160,12 +146,9 @@ loop also pays a `popcnt`-then-byte-fold sequence (no single-instruction
 byte-sum without z15's MIE3). Caveats: `Block RThroughput` is a steady-state
 throughput ceiling (no cache/front-end/branch modelling); the scalar baseline is
 an idealised loop, so real Go scalar would be a touch slower (making the s390x
-×scalar a conservative lower bound). All instructions in both loops are modelled
-by llvm-mca. Ballpark ordering only — the ppc64le estimate has since been
-replaced by a real POWER10 measurement (~3.0× at 1 MiB; the cycle-model row
-under-predicted because it modelled steady-state throughput on pwr9, not the
-in-cache compute-bound regime on pwr10), and the s390x row remains to be
-replaced by native `bytes/cycle` on real IBM Z silicon.
+×scalar a conservative lower bound and ppc64le likely a hair above parity in
+practice). All instructions in both loops are modelled by llvm-mca. Ballpark
+ordering only — to be replaced by native `bytes/cycle` on real POWER9 / z14.
 
 ## riscv64
 
@@ -176,16 +159,6 @@ Zvbb `vcpop.v` instruction. riscv64 therefore uses the portable
 `OnesCount64` word loop (itself a hardware `cpop` per word where the `Zbb`
 extension is present). If/when Go's riscv64 assembler gains `vcpop.v`, a kernel
 can be added without an API change.
-
-**Measured on real SpacemiT X60 (RVV 1.0) — honest loss.** On a real SpacemiT
-X60 (GCC Compile Farm, Go 1.26.4, June 2026) our scalar-fallback path runs at
-**258 MB/s** while [`barakmich/go-popcount`](https://github.com/barakmich/go-popcount)'s
-**SWAR kernel is ~5.5× faster (1426 MB/s)** on this core. This is a genuine loss
-on riscv64: with no `vcpop.v` to build a real RVV byte-popcount, our portable
-word loop has nothing to lever, and a hand-rolled SWAR bit-twiddle beats it.
-**The POPCNTQ/AVX2 win is amd64-only** — we do not claim a riscv64 win. (The X60
-is a low-power, *in-order* core and currently the only widely-available RVV 1.0
-silicon.)
 
 ## Existing work
 
@@ -213,16 +186,11 @@ is per-word, so the scalar baseline is an `OnesCount64` loop over the data.
 
 The amd64 kernels are validated on a real x86_64 host (not Rosetta — it has no
 AVX2 — and not a `--platform amd64` container, which crashes Go); arm64 is the
-native dev box; riscv64, loong64 and s390x build and run under QEMU; ppc64le is
-now also validated (and benchmarked) on real POWER10 silicon (GCC Compile Farm),
-and the portable fallback is build+test validated bit-exact on real POWER9
-(ppc64 big-endian) — seven architectures in all.
+native dev box; riscv64, loong64, ppc64le and s390x build and run under QEMU.
 
 The Go code is at **100 % statement coverage**, gated in CI on every
 architecture (native amd64 + arm64, and riscv64 + loong64 + ppc64le + s390x
-under QEMU); the build fails below 100 %. Coverage spans **six SIMD targets,
-validated on seven architectures** — the six SIMD arches plus ppc64 (big-endian),
-whose portable fallback is build+test validated bit-exact on real POWER9 silicon. All three amd64 `count` dispatch branches (hardware POPCNT,
+under QEMU); the build fails below 100 %. All three amd64 `count` dispatch branches (hardware POPCNT,
 the AVX2 fallback and the scalar path) are exercised on the native amd64 runner
 by toggling the feature flags. The figure is of the Go code only — the generated
 `.s` SIMD kernels are not measured by `go test -cover`; they are validated by the
