@@ -106,17 +106,33 @@ NEON `VCNT` (arm64) and LSX `VPCNTV` (loong64) give a genuine per-byte SIMD
 popcount and beat the scalar loop in-cache; out-of-cache they converge to the
 same memory-bandwidth ceiling. Native arm64 numbers are produced by CI.
 
-The **ppc64le** (VSX `VPOPCNTD`) and **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`)
-kernels are **qemu-validated; native perf pending**. They build, run, and pass
-the full table test + size sweep + `FuzzCount` seed corpus against the scalar
-reference under QEMU on every CI run, but QEMU/TCG is not cycle-accurate, so no
-throughput numbers are quoted for them until they can be measured on real POWER
-and IBM Z silicon.
+**loong64 is now measured on real Loongson 3A5000 silicon** (LSX, [GCC Compile
+Farm](https://portal.cfarm.net/) cfarm401, Go 1.26.4, `-count=6`, 2026-06-26):
+the LSX `VPCNTV` kernel runs at **~6.1× the scalar baseline** — and on this host
+it **beats the barakmich reference**. This supersedes any earlier
+qemu-validated-only framing for loong64; on real Loongson silicon the LSX path
+is a clear, measured win.
+
+**ppc64le is now measured on real POWER9 silicon** (VSX, [GCC Compile
+Farm](https://portal.cfarm.net/) cfarm433, Go 1.26.4, `-count=6`, 2026-06-26):
+the VSX `VPOPCNTD` kernel runs at **~2.9× the scalar baseline** — a measured
+native win that supersedes the earlier llvm-mca pwr9 cycle-model estimate below
+(which projected near-parity; real POWER9 clears that comfortably).
+
+The **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`) kernel remains **qemu-validated;
+native perf pending** — there is no IBM Z hardware available here. It builds,
+runs, and passes the full table test + size sweep + `FuzzCount` seed corpus
+against the scalar reference under QEMU on every CI run, but QEMU/TCG is not
+cycle-accurate, so no throughput number is quoted for it until it can be
+measured on real IBM Z silicon.
 
 #### ppc64le / s390x — llvm-mca cycle-model estimate
 
-**Static analysis, NOT a hardware measurement; native perf pending real silicon.**
-No native POWER/Z runner exists here and QEMU is not cycle-accurate, so the
+**Static analysis, NOT a hardware measurement.** For **ppc64le this estimate is
+now superseded** by the measured ~2.9× on real POWER9 (above); it is retained
+here only as the historical cycle-model projection. For **s390x it remains the
+only signal** — native perf still pending real IBM Z silicon. No native Z runner
+exists here and QEMU is not cycle-accurate, so the
 defensible perf signal is a cycle-model estimate. The committed 16-byte inner
 loops were extracted from `count_ppc64le.s` / `count_s390x.s` and fed to
 `llvm-mca` (LLVM 22; production PowerPC + SystemZ backends):
