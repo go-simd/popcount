@@ -119,21 +119,23 @@ the VSX `VPOPCNTD` kernel runs at **~2.9× the scalar baseline** — a measured
 native win that supersedes the earlier llvm-mca pwr9 cycle-model estimate below
 (which projected near-parity; real POWER9 clears that comfortably).
 
-The **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`) kernel remains **qemu-validated;
-native perf pending** — there is no IBM Z hardware available here. It builds,
-runs, and passes the full table test + size sweep + `FuzzCount` seed corpus
-against the scalar reference under QEMU on every CI run, but QEMU/TCG is not
-cycle-accurate, so no throughput number is quoted for it until it can be
-measured on real IBM Z silicon.
+The **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`) kernel is now **measured on real z15**
+(LPAR guest, VXE2, Ubuntu 6.8, go1.26.4, 2026-07-03): `BenchmarkCount/64KiB`
+= **21842 MB/s vs scalar 3444 MB/s = 6.4×**, and — flipping the amd64/RVV
+story — the SIMD kernel **BEATS `barakmich`'s SWAR** (5905 MB/s) by **3.7×**
+too. On RVV (SpacemiT X60) and on POWER8/9 the SWAR beat the SIMD kernel;
+on z15 VXE2 the picture flips because the vector `VPOPCT`+`VSUMQF` retire
+path is genuinely wider than 4× `POPGR` GPR-popcounts.
 
-#### ppc64le / s390x — llvm-mca cycle-model estimate
+#### ppc64le / s390x — llvm-mca cycle-model estimate (historical)
 
 **Static analysis, NOT a hardware measurement.** For **ppc64le this estimate is
-now superseded** by the measured ~2.9× on real POWER9 (above); it is retained
-here only as the historical cycle-model projection. For **s390x it remains the
-only signal** — native perf still pending real IBM Z silicon. No native Z runner
-exists here and QEMU is not cycle-accurate, so the
-defensible perf signal is a cycle-model estimate. The committed 16-byte inner
+now superseded** by the measured ~2.9× on real POWER9 (above). For **s390x it
+is also now superseded** by the measured 6.4× vs scalar / 3.7× vs barakmich on
+real z15 (above) — the z14 llvm-mca estimate of ~3.3× underprojected the real
+z15 gain by ~2×, as expected (llvm-mca idealizes the frontend and can't model
+the wider z15 execution unit dispatch). Retained here as the historical
+cycle-model projection. The committed 16-byte inner
 loops were extracted from `count_ppc64le.s` / `count_s390x.s` and fed to
 `llvm-mca` (LLVM 22; production PowerPC + SystemZ backends):
 
