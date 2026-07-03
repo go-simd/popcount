@@ -119,21 +119,22 @@ the VSX `VPOPCNTD` kernel runs at **~2.9× the scalar baseline** — a measured
 native win that supersedes the earlier llvm-mca pwr9 cycle-model estimate below
 (which projected near-parity; real POWER9 clears that comfortably).
 
-The **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`) kernel remains **qemu-validated;
-native perf pending** — there is no IBM Z hardware available here. It builds,
-runs, and passes the full table test + size sweep + `FuzzCount` seed corpus
-against the scalar reference under QEMU on every CI run, but QEMU/TCG is not
-cycle-accurate, so no throughput number is quoted for it until it can be
-measured on real IBM Z silicon.
+The **s390x** (`VPOPCT` + `VSUMB`/`VSUMQF`) kernel is now **measured on real IBM
+z15 silicon** (VXE2, native execution, 2026-07-03, `-count=6`): it runs at
+**~6.5× the scalar baseline** and **beats the barakmich SWAR reference** on this
+host. This supersedes the qemu-validated-only framing (and the cycle-model
+estimate of ~3.3× below): the per-byte counts are reduced *inside* the vector
+unit (`VSUMB`+`VSUMQF`), avoiding the per-word GPR round-trip that caps the
+POWER9 path — so s390x, unlike ppc64le, is a clear vector win over strong scalar
+HW popcount.
 
-#### ppc64le / s390x — llvm-mca cycle-model estimate
+#### llvm-mca cycle-model estimate (historical — both ppc64le and s390x now measured)
 
-**Static analysis, NOT a hardware measurement.** For **ppc64le this estimate is
-now superseded** by the measured ~2.9× on real POWER9 (above); it is retained
-here only as the historical cycle-model projection. For **s390x it remains the
-only signal** — native perf still pending real IBM Z silicon. No native Z runner
-exists here and QEMU is not cycle-accurate, so the
-defensible perf signal is a cycle-model estimate. The committed 16-byte inner
+**Static analysis, NOT a hardware measurement — retained for historical
+comparison.** Both non-amd64 vector arches here are now natively measured:
+**ppc64le** at ~2.9× on real POWER9 (above) and **s390x** at ~6.5× on real IBM
+z15 (above, beating barakmich). The cycle-model rows below are superseded by those
+hardware numbers and kept only for reference. The committed 16-byte inner
 loops were extracted from `count_ppc64le.s` / `count_s390x.s` and fed to
 `llvm-mca` (LLVM 22; production PowerPC + SystemZ backends):
 
@@ -150,7 +151,7 @@ bit-twiddle.
 | arch (cpu) | SIMD loop (16 B/iter) | scalar loop (8 B/iter, HW popcount) | est. SIMD bytes/cycle | est. scalar bytes/cycle | est. ×scalar |
 |---|---:|---:|---:|---:|---:|
 | ppc64le (pwr9) | ~2.5 cyc/iter | ~1.3 cyc/iter | **~6.4** | ~6.2 | **~1.04× (≈parity)** |
-| s390x (z14)    | ~1.5 cyc/iter | ~2.5 cyc/iter | **~10.7** | ~3.2 | **~3.3×** |
+| s390x (z14, est.) | ~1.5 cyc/iter | ~2.5 cyc/iter | **~10.7** | ~3.2 | ~3.3× (measured z15: **~6.5×**) |
 
 The honest read: on **POWER9 the VSX path barely edges scalar** — `VPOPCNTD`
 counts a full vector, but the two `MFVSRD`/`MFVSRLD` moves to extract the
@@ -164,7 +165,8 @@ throughput ceiling (no cache/front-end/branch modelling); the scalar baseline is
 an idealised loop, so real Go scalar would be a touch slower (making the s390x
 ×scalar a conservative lower bound and ppc64le likely a hair above parity in
 practice). All instructions in both loops are modelled by llvm-mca. Ballpark
-ordering only — to be replaced by native `bytes/cycle` on real POWER9 / z14.
+ordering only; both rows are now superseded by native measurements (ppc64le ~2.9×
+on real POWER9, s390x ~6.5× on real IBM z15, above).
 
 ## riscv64
 
