@@ -52,11 +52,11 @@ func main() {
 					Raw("ADD $16, R4, R5").
 					Raw("CMPBGT R5, R2, done"). // i+16 > len -> tail
 					Raw("ADD R1, R4, R6").
-					Raw("VL (R6), V0").         // load 16 bytes
-					Raw("VPOPCT V0, V1").       // per-byte popcount (each 0..8)
-					Raw("VSUMB V1, V2, V1").    // 16 bytes -> 4 uint32 lane sums
-					Raw("VSUMQF V1, V2, V1").   // 4 uint32 -> 1 uint128 sum
-					Raw("VLGVG $1, V1, R7").    // low doubleword of the block sum
+					Raw("VL (R6), V0").       // load 16 bytes
+					Raw("VPOPCT V0, V1").     // per-byte popcount (each 0..8)
+					Raw("VSUMB V1, V2, V1").  // 16 bytes -> 4 uint32 lane sums
+					Raw("VSUMQF V1, V2, V1"). // 4 uint32 -> 1 uint128 sum
+					Raw("VLGVG $1, V1, R7").  // low doubleword of the block sum
 					Raw("ADD R7, R3, R3").
 					Raw("ADD $16, R4, R4").
 					Raw("BR loop").
